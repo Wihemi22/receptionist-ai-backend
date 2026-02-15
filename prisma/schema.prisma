@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id              String   @id @default(uuid())
+  name            String
+  phone           String?
+  email           String
+  timezone        String   @default("America/New_York")
+  plan            Plan     @default(STARTER)
+  settingsJson    Json?    @map("settings_json")
+  stripeCustomerId String? @unique @map("stripe_customer_id")
+  stripeSubId     String?  @unique @map("stripe_subscription_id")
+  vapiAssistantId String?  @map("vapi_assistant_id")
+  vapiPhoneId     String?  @map("vapi_phone_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  users         User[]
+  calls         Call[]
+  appointments  Appointment[]
+  availability  Availability[]
+  services      Service[]
+  aiConfig      AiConfig?
+
+  @@map("organizations")
+}
+
+enum Plan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+model User {
+  id              String   @id @default(uuid())
+  orgId           String   @map("org_id")
+  email           String   @unique
+  name            String
+  role            Role     @default(OWNER)
+  authProviderId  String?  @map("auth_provider_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("users")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+model Call {
+  id            String      @id @default(uuid())
+  orgId         String      @map("org_id")
+  callerPhone   String      @map("caller_phone")
+  callerName    String?     @map("caller_name")
+  duration      Int         @default(0) // seconds
+  status        CallStatus  @default(RINGING)
+  sentiment     Sentiment?
+  transcript    String?     @db.Text
+  summary       String?     @db.Text
+  recordingUrl  String?     @map("recording_url")
+  vapiCallId    String?     @unique @map("vapi_call_id")
+  metadata      Json?
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  appointment  Appointment?
+
+  @@index([orgId, createdAt])
+  @@map("calls")
+}
+
+enum CallStatus {
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  MISSED
+  FAILED
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  UNKNOWN
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  orgId         String            @map("org_id")
+  callId        String?           @unique @map("call_id")
+  clientName    String            @map("client_name")
+  clientPhone   String            @map("client_phone")
+  clientEmail   String?           @map("client_email")
+  service       String
+  startTime     DateTime          @map("start_time")
+  endTime       DateTime          @map("end_time")
+  status        AppointmentStatus @default(PENDING)
+  remindersSent Int               @default(0) @map("reminders_sent")
+  notes         String?           @db.Text
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  call         Call?        @relation(fields: [callId], references: [id])
+
+  @@index([orgId, startTime])
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model Availability {
+  id        String  @id @default(uuid())
+  orgId     String  @map("org_id")
+  dayOfWeek Int     @map("day_of_week") // 0=Sunday, 6=Saturday
+  startTime String  @map("start_time")  // "09:00"
+  endTime   String  @map("end_time")    // "17:00"
+  isActive  Boolean @default(true) @map("is_active")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, dayOfWeek])
+  @@map("availability")
+}
+
+model Service {
+  id              String  @id @default(uuid())
+  orgId           String  @map("org_id")
+  name            String
+  durationMinutes Int     @map("duration_minutes")
+  price           Float?
+  description     String?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("services")
+}
+
+model AiConfig {
+  id               String  @id @default(uuid())
+  orgId            String  @unique @map("org_id")
+  greetingMessage  String  @map("greeting_message") @db.Text
+  personality      String  @default("professional")
+  voiceId          String  @default("alloy") @map("voice_id")
+  instructions     String? @db.Text
+  escalationRules  Json?   @map("escalation_rules")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("ai_configs")
+}

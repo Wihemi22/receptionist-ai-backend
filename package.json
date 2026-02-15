@@ -8,8 +8,7 @@
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "db:migrate": "npx prisma migrate deploy",
-    "db:seed": "node prisma/seed.js",
-    "postinstall": "npx prisma generate"
+    "db:seed": "node prisma/seed.js"
   },
   "engines": {
     "node": ">=18.0.0"
